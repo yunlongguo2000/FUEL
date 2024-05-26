@@ -9,3 +9,4 @@ build/
 devel/
 .catkin_tools/
 logs/
+src/fuel_planner/utils/lkh_tsp_solver/resource/
