@@ -55,6 +55,7 @@ void FrontierFinder::searchFrontiers() {
   ros::Time t1 = ros::Time::now();
   tmp_frontiers_.clear();
 
+  //--------------- Incremental boundary detection ---------------------
   // Bounding box of updated region
   Vector3d update_min, update_max;
   edt_env_->sdf_map_->getUpdatedBox(update_min, update_max, true);
@@ -121,7 +122,7 @@ void FrontierFinder::searchFrontiers() {
 }
 
 void FrontierFinder::expandFrontier(
-    const Eigen::Vector3i& first /* , const int& depth, const int& parent_id */) {
+    const Eigen::Vector3i& first /* , const int& depth, const int& parent_id */) { //Perform cluster search by distance to check the feasibility of new clusters
   // std::cout << "depth: " << depth << std::endl;
   auto t1 = ros::Time::now();
 
@@ -164,6 +165,8 @@ void FrontierFinder::expandFrontier(
 }
 
 void FrontierFinder::splitLargeFrontiers(list<Frontier>& frontiers) {
+  // A principal component analysis was performed on each cluster, 
+  // and if the maximum eigenvalue exceeded a threshold, the cluster was split into two uniform clusters along the first principal axis.
   list<Frontier> splits, tmps;
   for (auto it = frontiers.begin(); it != frontiers.end(); ++it) {
     // Check if each frontier needs to be split horizontally
@@ -177,6 +180,7 @@ void FrontierFinder::splitLargeFrontiers(list<Frontier>& frontiers) {
 }
 
 bool FrontierFinder::splitHorizontally(const Frontier& frontier, list<Frontier>& splits) {
+  // Using principal component analysis, separate the larger cluster into two even clusters along the first principal axis
   // Split a frontier into small piece if it is too large
   auto mean = frontier.average_.head<2>();
   bool need_split = false;
@@ -389,13 +393,14 @@ void FrontierFinder::computeFrontierInfo(Frontier& ftr) {
   downsample(ftr.cells_, ftr.filtered_cells_);
 }
 
-void FrontierFinder::computeFrontiersToVisit() {
+void FrontierFinder::computeFrontiersToVisit() {  //Viewpoint Generation
   first_new_ftr_ = frontiers_.end();
   int new_num = 0;
   int new_dormant_num = 0;
   // Try find viewpoints for each cluster and categorize them according to viewpoint number
   for (auto& tmp_ftr : tmp_frontiers_) {
     // Search viewpoints around frontier
+    // Sample viewpoints around the average position of the boundary and check the coverage of the boundary cells
     sampleViewpoints(tmp_ftr);
     if (!tmp_ftr.viewpoints_.empty()) {
       ++new_num;
@@ -660,6 +665,7 @@ void FrontierFinder::findViewpoints(
 
 // Sample viewpoints around frontier's average position, check coverage to the frontier cells
 void FrontierFinder::sampleViewpoints(Frontier& frontier) {
+  // It is obtained by uniformly sampling points in a cylindrical coordinate system with the origin at the center of the cluster
   // Evaluate sample viewpoints on circles, find ones that cover most cells
   for (double rc = candidate_rmin_, dr = (candidate_rmax_ - candidate_rmin_) / candidate_rnum_;
        rc <= candidate_rmax_ + 1e-3; rc += dr)
@@ -671,6 +677,7 @@ void FrontierFinder::sampleViewpoints(Frontier& frontier) {
           edt_env_->sdf_map_->getInflateOccupancy(sample_pos) == 1 || isNearUnknown(sample_pos))
         continue;
 
+      //----------------- Calculate viewpoint coverage, filter and sort in descending order ------------------------
       // Compute average yaw
       auto& cells = frontier.filtered_cells_;
       Eigen::Vector3d ref_dir = (cells.front() - sample_pos).normalized();
